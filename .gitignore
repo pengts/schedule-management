@@ -2,7 +2,9 @@ node_modules/
 dist/
 dist-electron/
 release/
-build/
 __pycache__/
 *.spec
 *.pyc
+wails-app/build/
+wails-app/frontend/node_modules/
+wails-app/frontend/dist/

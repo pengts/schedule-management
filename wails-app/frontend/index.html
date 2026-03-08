@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>日程管理</title>
+</head>
+<body>
+  <div id="app">
+    <div class="titlebar" id="titlebar">
+      <div class="titlebar-drag" id="titlebar-drag"></div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-view="month">月</button>
+        <button class="nav-tab" data-view="week">周</button>
+        <button class="nav-tab" data-view="day">日</button>
+      </div>
+      <div class="titlebar-spacer"></div>
+      <button class="pin-btn" id="pin-btn" title="置顶">&#9671;</button>
+      <div class="window-controls">
+        <button class="win-btn" id="btn-min">&#8212;</button>
+        <button class="win-btn" id="btn-max">&#9633;</button>
+        <button class="win-btn win-close" id="btn-close">&#10005;</button>
+      </div>
+    </div>
+    <div class="main-content" id="main-content"></div>
+  </div>
+  <div class="modal-overlay" id="modal-overlay" style="display:none">
+    <div class="modal" id="modal"></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
