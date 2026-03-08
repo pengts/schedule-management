@@ -46,11 +46,15 @@ func (a *App) initDB() {
 	a.db.Exec(`CREATE TABLE IF NOT EXISTS day_blocks (
 		id TEXT PRIMARY KEY, date TEXT,
 		start_hour INTEGER, start_minute INTEGER,
-		duration INTEGER, title TEXT, color TEXT
+		duration INTEGER, title TEXT, color TEXT,
+		description TEXT DEFAULT ''
 	)`)
 	a.db.Exec(`CREATE TABLE IF NOT EXISTS settings (
 		key TEXT PRIMARY KEY, value TEXT
 	)`)
+
+	// 迁移：为旧表添加 description 列
+	a.db.Exec(`ALTER TABLE day_blocks ADD COLUMN description TEXT DEFAULT ''`)
 }
 
 // ─── 窗口控制 ───
@@ -176,11 +180,12 @@ type TimeBlock struct {
 	Duration    int    `json:"duration"`
 	Title       string `json:"title"`
 	Color       string `json:"color"`
+	Description string `json:"description"`
 }
 
 func (a *App) GetDayBlocks(date string) []TimeBlock {
 	rows, err := a.db.Query(
-		`SELECT id, date, start_hour, start_minute, duration, title, color
+		`SELECT id, date, start_hour, start_minute, duration, title, color, COALESCE(description, '')
 		 FROM day_blocks WHERE date=? ORDER BY start_hour, start_minute`, date)
 	if err != nil {
 		return nil
@@ -190,7 +195,7 @@ func (a *App) GetDayBlocks(date string) []TimeBlock {
 	var blocks []TimeBlock
 	for rows.Next() {
 		var b TimeBlock
-		rows.Scan(&b.ID, &b.Date, &b.StartHour, &b.StartMinute, &b.Duration, &b.Title, &b.Color)
+		rows.Scan(&b.ID, &b.Date, &b.StartHour, &b.StartMinute, &b.Duration, &b.Title, &b.Color, &b.Description)
 		blocks = append(blocks, b)
 	}
 	if blocks == nil {
@@ -199,14 +204,14 @@ func (a *App) GetDayBlocks(date string) []TimeBlock {
 	return blocks
 }
 
-func (a *App) AddDayBlock(date string, startHour, startMinute, duration int, title, color string) {
-	a.db.Exec(`INSERT INTO day_blocks VALUES (?,?,?,?,?,?,?)`,
-		uuid.New().String()[:12], date, startHour, startMinute, duration, title, color)
+func (a *App) AddDayBlock(date string, startHour, startMinute, duration int, title, color, description string) {
+	a.db.Exec(`INSERT INTO day_blocks VALUES (?,?,?,?,?,?,?,?)`,
+		uuid.New().String()[:12], date, startHour, startMinute, duration, title, color, description)
 }
 
-func (a *App) UpdateDayBlock(id, title, color string, startHour, startMinute, duration int) {
-	a.db.Exec(`UPDATE day_blocks SET title=?, color=?, start_hour=?, start_minute=?, duration=? WHERE id=?`,
-		title, color, startHour, startMinute, duration, id)
+func (a *App) UpdateDayBlock(id, title, color string, startHour, startMinute, duration int, description string) {
+	a.db.Exec(`UPDATE day_blocks SET title=?, color=?, start_hour=?, start_minute=?, duration=?, description=? WHERE id=?`,
+		title, color, startHour, startMinute, duration, description, id)
 }
 
 func (a *App) RemoveDayBlock(id string) {

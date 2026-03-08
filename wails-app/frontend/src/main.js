@@ -323,7 +323,25 @@ async function renderWeek() {
 // ═══════════════════════
 //  日视图
 // ═══════════════════════
+
+// 颜色工具：根据主色生成浅色背景
+function colorToRGBA(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// 拖选状态
+let dragState = null;
+
+function closePopover() {
+  const existing = document.querySelector('.block-popover');
+  if (existing) existing.remove();
+}
+
 async function renderDay() {
+  closePopover();
   const now = new Date();
   if (!state.weekMonday) {
     state.weekMonday = getMonday(now);
@@ -371,14 +389,14 @@ async function renderDay() {
     html += `<div class="time-label">${hour}:00</div>`;
     for (let i = 0; i < 7; i++) {
       const ds = formatDate(weekDates[i]);
-      html += `<div class="time-cell" data-date="${ds}" data-hour="${hour}"></div>`;
+      html += `<div class="time-cell" data-date="${ds}" data-hour="${hour}" data-col="${i}"></div>`;
     }
   }
 
   html += '</div></div>';
   $content.innerHTML = html;
 
-  // 绘制时间块
+  // 绘制飞书风格时间块
   const cells = $content.querySelectorAll('.time-cell');
   for (let i = 0; i < 7; i++) {
     const ds = formatDate(weekDates[i]);
@@ -392,17 +410,26 @@ async function renderDay() {
       if (cell) {
         const block = document.createElement('div');
         block.className = 'time-block';
-        block.style.cssText = `top:${topPx}px; height:${heightPx}px; background:${blk.color};`;
-        block.textContent = blk.title;
+        const bgColor = colorToRGBA(blk.color, 0.12);
+        const bgHover = colorToRGBA(blk.color, 0.18);
+        block.style.cssText = `top:${topPx}px; height:${heightPx}px; --block-color:${blk.color}; --block-bg:${bgColor}; --block-bg-hover:${bgHover};`;
+
+        const endTotalMin = blk.startHour * 60 + blk.startMinute + blk.duration;
+        const endH = Math.floor(endTotalMin / 60);
+        const endM = endTotalMin % 60;
+        const timeStr = `${String(blk.startHour).padStart(2,'0')}:${String(blk.startMinute).padStart(2,'0')} - ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+        block.innerHTML = `<div class="block-title-text">${escHtml(blk.title)}</div><div class="block-time">${timeStr}</div>`;
         block.addEventListener('click', (e) => {
           e.stopPropagation();
-          editBlockDialog(blk);
+          showBlockPopover(blk, e);
         });
         cell.appendChild(block);
       }
     }
   }
 
+  // 导航事件
   document.getElementById('back-week').addEventListener('click', () => { state.view = 'week'; render(); });
   document.getElementById('week-prev').addEventListener('click', () => {
     state.weekMonday = new Date(state.weekMonday);
@@ -415,27 +442,148 @@ async function renderDay() {
     renderDay();
   });
 
+  // ─── 鼠标拖选添加日程 ───
+  const gridWrapper = $content.querySelector('.day-grid-wrapper');
+
   cells.forEach(cell => {
-    cell.addEventListener('click', () => {
-      newBlockDialog(cell.dataset.date, parseInt(cell.dataset.hour));
+    cell.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      // 如果点击的是已有时间块，不触发拖选
+      if (e.target.closest('.time-block')) return;
+      closePopover();
+      dragState = {
+        date: cell.dataset.date,
+        col: parseInt(cell.dataset.col),
+        startHour: parseInt(cell.dataset.hour),
+        endHour: parseInt(cell.dataset.hour),
+      };
+      updateDragHighlight(cells);
+      e.preventDefault();
     });
+
+    cell.addEventListener('mouseenter', () => {
+      if (!dragState) return;
+      // 只允许同一列拖选
+      if (parseInt(cell.dataset.col) !== dragState.col) return;
+      dragState.endHour = parseInt(cell.dataset.hour);
+      updateDragHighlight(cells);
+    });
+  });
+
+  document.addEventListener('mouseup', onDragEnd);
+  // 存储清理函数
+  state._dayCleanup = () => {
+    document.removeEventListener('mouseup', onDragEnd);
+  };
+
+  function onDragEnd() {
+    if (!dragState) return;
+    const ds = dragState;
+    dragState = null;
+    clearDragHighlight(cells);
+
+    const minH = Math.min(ds.startHour, ds.endHour);
+    const maxH = Math.max(ds.startHour, ds.endHour);
+    const duration = (maxH - minH + 1) * 60;
+
+    blockDialog(ds.date, minH, 0, duration, null);
+  }
+}
+
+function updateDragHighlight(cells) {
+  if (!dragState) return;
+  const minH = Math.min(dragState.startHour, dragState.endHour);
+  const maxH = Math.max(dragState.startHour, dragState.endHour);
+  cells.forEach(cell => {
+    const col = parseInt(cell.dataset.col);
+    const hour = parseInt(cell.dataset.hour);
+    if (col === dragState.col && hour >= minH && hour <= maxH) {
+      cell.classList.add('drag-selected');
+    } else {
+      cell.classList.remove('drag-selected');
+    }
   });
 }
 
-function newBlockDialog(date, hour) {
-  blockDialog(date, hour, null);
+function clearDragHighlight(cells) {
+  cells.forEach(cell => cell.classList.remove('drag-selected'));
 }
 
-function editBlockDialog(block) {
-  blockDialog(block.date, block.startHour, block);
+// ─── 详情弹窗 (点击时间块显示) ───
+function showBlockPopover(blk, event) {
+  closePopover();
+
+  const endTotalMin = blk.startHour * 60 + blk.startMinute + blk.duration;
+  const endH = Math.floor(endTotalMin / 60);
+  const endM = endTotalMin % 60;
+  const timeStr = `${String(blk.startHour).padStart(2,'0')}:${String(blk.startMinute).padStart(2,'0')} - ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+  const popover = document.createElement('div');
+  popover.className = 'block-popover';
+
+  let descHtml = blk.description
+    ? `<div class="popover-desc">${escHtml(blk.description)}</div>`
+    : '';
+
+  popover.innerHTML = `
+    <div class="popover-title" style="color:${blk.color}">${escHtml(blk.title)}</div>
+    <div class="popover-time">${blk.date} ${timeStr}</div>
+    ${descHtml}
+    <div class="popover-actions">
+      <button class="btn btn-danger" id="pop-delete">删除</button>
+      <button class="btn btn-primary" id="pop-edit">编辑</button>
+    </div>
+  `;
+
+  document.body.appendChild(popover);
+
+  // 定位弹窗
+  const rect = event.target.closest('.time-block').getBoundingClientRect();
+  let left = rect.right + 8;
+  let top = rect.top;
+  const pw = popover.offsetWidth;
+  const ph = popover.offsetHeight;
+  if (left + pw > window.innerWidth - 10) {
+    left = rect.left - pw - 8;
+  }
+  if (top + ph > window.innerHeight - 10) {
+    top = window.innerHeight - ph - 10;
+  }
+  if (top < 10) top = 10;
+  popover.style.left = left + 'px';
+  popover.style.top = top + 'px';
+
+  popover.querySelector('#pop-edit').addEventListener('click', () => {
+    closePopover();
+    blockDialog(blk.date, blk.startHour, blk.startMinute, blk.duration, blk);
+  });
+  popover.querySelector('#pop-delete').addEventListener('click', async () => {
+    await callGo('RemoveDayBlock', blk.id);
+    closePopover();
+    renderDay();
+  });
+
+  // 点击弹窗外关闭
+  setTimeout(() => {
+    document.addEventListener('click', onClickOutsidePopover);
+  }, 0);
+
+  function onClickOutsidePopover(e) {
+    if (!popover.contains(e.target) && !e.target.closest('.time-block')) {
+      closePopover();
+      document.removeEventListener('click', onClickOutsidePopover);
+    }
+  }
 }
 
-function blockDialog(date, hour, block) {
+// ─── 新建/编辑弹窗 ───
+function blockDialog(date, hour, minute, duration, block) {
   const isEdit = !!block;
   const title = block ? block.title : '';
+  const desc = block ? (block.description || '') : '';
   const sHour = block ? block.startHour : hour;
-  const sMin = block ? block.startMinute : 0;
-  const dur = block ? block.duration : 60;
+  const sMin = block ? block.startMinute : (minute || 0);
+  const dur = block ? block.duration : (duration || 60);
   const color = block ? block.color : COLORS[0];
 
   let hourOptions = '';
@@ -443,21 +591,25 @@ function blockDialog(date, hour, block) {
     hourOptions += `<option value="${h}" ${h===sHour?'selected':''}>${h}时</option>`;
   }
 
+  const minOptions = [0, 15, 30, 45];
+  let minOptionsHtml = minOptions.map(m =>
+    `<option value="${m}" ${m===sMin?'selected':''}>${String(m).padStart(2,'0')}分</option>`
+  ).join('');
+
   let colorDots = COLORS.map(c =>
     `<div class="color-dot ${c===color?'selected':''}" data-color="${c}" style="background:${c}"></div>`
   ).join('');
 
   showModal(`
-    <h3>${isEdit ? '编辑' : '新建'}时间块</h3>
+    <h3>${isEdit ? '编辑' : '新建'}日程</h3>
     <label class="modal-label">标题</label>
-    <input id="blk-title" value="${escHtml(title)}" placeholder="事项名称" />
+    <input id="blk-title" value="${escHtml(title)}" placeholder="日程名称" />
+    <label class="modal-label">详细描述</label>
+    <textarea id="blk-desc" placeholder="可选：添加详细描述..." style="min-height:70px">${escHtml(desc)}</textarea>
     <label class="modal-label">开始时间</label>
     <div class="time-select-row">
       <select id="blk-hour">${hourOptions}</select>
-      <select id="blk-min">
-        <option value="0" ${sMin===0?'selected':''}>00分</option>
-        <option value="30" ${sMin===30?'selected':''}>30分</option>
-      </select>
+      <select id="blk-min">${minOptionsHtml}</select>
     </div>
     <label class="modal-label">时长 (分钟)</label>
     <input id="blk-dur" type="number" value="${dur}" min="15" step="15" />
@@ -490,10 +642,11 @@ function blockDialog(date, hour, block) {
     const h = parseInt(document.getElementById('blk-hour').value);
     const m = parseInt(document.getElementById('blk-min').value);
     const d = parseInt(document.getElementById('blk-dur').value);
+    const descVal = document.getElementById('blk-desc').value.trim();
     if (isEdit) {
-      await callGo('UpdateDayBlock', block.id, t, selectedColor, h, m, d);
+      await callGo('UpdateDayBlock', block.id, t, selectedColor, h, m, d, descVal);
     } else {
-      await callGo('AddDayBlock', date, h, m, d, t, selectedColor);
+      await callGo('AddDayBlock', date, h, m, d, t, selectedColor, descVal);
     }
     hideModal();
     renderDay();
@@ -514,6 +667,13 @@ function escHtml(s) {
   div.textContent = s;
   return div.innerHTML;
 }
+
+// 全局点击关闭弹窗
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.block-popover') && !e.target.closest('.time-block')) {
+    closePopover();
+  }
+});
 
 // ─── 启动 ───
 initBindings().then(async () => {

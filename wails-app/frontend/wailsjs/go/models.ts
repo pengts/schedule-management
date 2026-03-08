@@ -22,6 +22,7 @@ export namespace main {
 	    duration: number;
 	    title: string;
 	    color: string;
+	    description: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimeBlock(source);
@@ -36,6 +37,7 @@ export namespace main {
 	        this.duration = source["duration"];
 	        this.title = source["title"];
 	        this.color = source["color"];
+	        this.description = source["description"];
 	    }
 	}
 	export class WeekTask {

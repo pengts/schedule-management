@@ -251,7 +251,7 @@ input:focus, textarea:focus, select:focus {
 }
 .goal-item {
   font-size: 13px;
-  color: var(--text2);
+  color: var(--text);
   padding: 3px 0;
   border-bottom: 1px solid var(--border-light);
   line-height: 1.6;
@@ -421,23 +421,29 @@ input:focus, textarea:focus, select:focus {
 .time-cell:hover { background: var(--surface-hover); }
 .time-block {
   position: absolute;
-  left: 3px; right: 3px;
-  border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
+  left: 2px; right: 2px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
   overflow: hidden;
   cursor: pointer;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  transition: opacity var(--transition), transform var(--transition);
-  line-height: 1.3;
+  border-left: 3px solid var(--block-color, #4A7FE5);
+  background: var(--block-bg, rgba(74, 127, 229, 0.12));
+  color: var(--block-color, #4A7FE5);
+  transition: background var(--transition), box-shadow var(--transition);
+  line-height: 1.4;
+}
+.time-block .block-time {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.75;
+  margin-top: 1px;
 }
 .time-block:hover {
-  opacity: 0.92;
-  transform: scale(1.01);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  background: var(--block-bg-hover, rgba(74, 127, 229, 0.18));
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
 /* ─── 弹窗 ─── */
@@ -553,4 +559,60 @@ input:focus, textarea:focus, select:focus {
 /* ─── 响应式 ─── */
 @media (max-width: 900px) {
   .month-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ─── 拖选高亮 ─── */
+.time-cell.drag-selected {
+  background: rgba(74, 127, 229, 0.10);
+}
+.time-cell.drag-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* ─── 详情弹窗 (飞书风格) ─── */
+.block-popover {
+  position: fixed;
+  z-index: 300;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  padding: 16px;
+  min-width: 260px;
+  max-width: 340px;
+  animation: slideUp 0.15s ease;
+}
+.block-popover .popover-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.block-popover .popover-time {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+.block-popover .popover-desc {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-light);
+}
+.block-popover .popover-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
 }
