@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -30,7 +30,7 @@ func (a *App) initDB() {
 	dataDir := filepath.Join(homeDir, ".schedule-mgmt")
 	os.MkdirAll(dataDir, 0755)
 
-	db, err := sql.Open("sqlite3", filepath.Join(dataDir, "data.db"))
+	db, err := sql.Open("sqlite", filepath.Join(dataDir, "data.db"))
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,6 @@
 import './style.css';
 
-// Wails Go bindings will be generated at build time
+// Wails Go bindings
 let GoApp = {};
 
 async function initBindings() {
@@ -12,12 +12,23 @@ async function initBindings() {
   }
 }
 
+async function callGo(fn, ...args) {
+  try {
+    if (GoApp[fn]) {
+      return await GoApp[fn](...args);
+    }
+  } catch (e) {
+    console.error(`Go call ${fn} failed:`, e);
+  }
+  return null;
+}
+
 // ─── 状态 ───
 const state = {
   view: 'month',
   year: new Date().getFullYear(),
   month: new Date().getMonth() + 1,
-  weekMonday: null, // Date object
+  weekMonday: null,
 };
 
 const COLORS = ['#4A7FE5', '#3dba7a', '#e54d4d', '#f0923e', '#8b5cf6', '#06b6d4'];
@@ -32,18 +43,16 @@ const $overlay = document.getElementById('modal-overlay');
 const $modal = document.getElementById('modal');
 
 // ─── 标题栏事件 ───
-// Drag is handled via CSS --wails-draggable attribute
-
-document.getElementById('btn-min').addEventListener('click', () => GoApp.WindowMinimise?.());
-document.getElementById('btn-max').addEventListener('click', () => GoApp.WindowToggleMaximise?.());
-document.getElementById('btn-close').addEventListener('click', () => GoApp.WindowClose?.());
+document.getElementById('btn-min').addEventListener('click', () => callGo('WindowMinimise'));
+document.getElementById('btn-max').addEventListener('click', () => callGo('WindowToggleMaximise'));
+document.getElementById('btn-close').addEventListener('click', () => callGo('WindowClose'));
 
 const $pin = document.getElementById('pin-btn');
 let pinned = false;
 
 $pin.addEventListener('click', async () => {
   pinned = !pinned;
-  await GoApp.SetAlwaysOnTop?.(pinned);
+  await callGo('SetAlwaysOnTop', pinned);
   updatePinDisplay();
 });
 
@@ -151,12 +160,9 @@ async function renderMonth() {
     <div class="month-grid">
   `;
 
-  // 预加载所有月份目标
   const allGoals = {};
   for (let m = 1; m <= 12; m++) {
-    try {
-      allGoals[m] = await GoApp.GetMonthGoals?.(state.year, m) || [];
-    } catch(e) { allGoals[m] = []; }
+    allGoals[m] = (await callGo('GetMonthGoals', state.year, m)) || [];
   }
 
   for (let m = 1; m <= 12; m++) {
@@ -179,7 +185,6 @@ async function renderMonth() {
   html += '</div>';
   $content.innerHTML = html;
 
-  // 事件
   document.getElementById('year-prev').addEventListener('click', () => { state.year--; renderMonth(); });
   document.getElementById('year-next').addEventListener('click', () => { state.year++; renderMonth(); });
 
@@ -197,8 +202,7 @@ async function renderMonth() {
 }
 
 async function editMonthGoals(month) {
-  let goals = [];
-  try { goals = await GoApp.GetMonthGoals?.(state.year, month) || []; } catch(e) {}
+  const goals = (await callGo('GetMonthGoals', state.year, month)) || [];
   const text = goals.map(g => g.goal).join('\n');
 
   showModal(`
@@ -215,7 +219,7 @@ async function editMonthGoals(month) {
   document.getElementById('modal-save').addEventListener('click', async () => {
     const val = document.getElementById('goal-text').value.trim();
     const newGoals = val ? val.split('\n').map(s => s.trim()).filter(Boolean) : [];
-    await GoApp.SetMonthGoals?.(state.year, month, newGoals);
+    await callGo('SetMonthGoals', state.year, month, newGoals);
     hideModal();
     renderMonth();
   });
@@ -243,8 +247,7 @@ async function renderWeek() {
 
   for (const w of weeks) {
     const isCurrent = (state.year === currentYear && w.weekNumber === currentWn);
-    let tasks = [];
-    try { tasks = await GoApp.GetWeekTasks?.(state.year, w.weekNumber) || []; } catch(e) {}
+    const tasks = (await callGo('GetWeekTasks', state.year, w.weekNumber)) || [];
 
     const monStr = `${w.monday.getMonth()+1}/${w.monday.getDate()}`;
     const sunStr = `${w.sunday.getMonth()+1}/${w.sunday.getDate()}`;
@@ -271,7 +274,6 @@ async function renderWeek() {
 
   $content.innerHTML = html;
 
-  // 事件
   document.getElementById('back-month').addEventListener('click', () => { state.view = 'month'; render(); });
   document.getElementById('month-prev').addEventListener('click', () => {
     state.month--;
@@ -294,14 +296,14 @@ async function renderWeek() {
 
   $content.querySelectorAll('.task-checkbox').forEach(el => {
     el.addEventListener('change', async () => {
-      await GoApp.ToggleWeekTask?.(el.dataset.tid);
+      await callGo('ToggleWeekTask', el.dataset.tid);
       renderWeek();
     });
   });
 
   $content.querySelectorAll('.task-remove').forEach(el => {
     el.addEventListener('click', async () => {
-      await GoApp.RemoveWeekTask?.(el.dataset.remove);
+      await callGo('RemoveWeekTask', el.dataset.remove);
       renderWeek();
     });
   });
@@ -311,7 +313,7 @@ async function renderWeek() {
       if (e.key === 'Enter') {
         const text = el.value.trim();
         if (!text) return;
-        await GoApp.AddWeekTask?.(state.year, parseInt(el.dataset.wn), text);
+        await callGo('AddWeekTask', state.year, parseInt(el.dataset.wn), text);
         renderWeek();
       }
     });
@@ -334,7 +336,6 @@ async function renderDay() {
   const hours = [];
   for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
 
-  // 预加载7天的blocks
   const weekDates = [];
   const allBlocks = {};
   for (let i = 0; i < 7; i++) {
@@ -342,7 +343,7 @@ async function renderDay() {
     d.setDate(d.getDate() + i);
     weekDates.push(d);
     const ds = formatDate(d);
-    try { allBlocks[ds] = await GoApp.GetDayBlocks?.(ds) || []; } catch(e) { allBlocks[ds] = []; }
+    allBlocks[ds] = (await callGo('GetDayBlocks', ds)) || [];
   }
 
   let html = `
@@ -356,7 +357,6 @@ async function renderDay() {
       <div class="day-grid">
   `;
 
-  // 表头
   html += `<div class="day-col-header"></div>`;
   for (let i = 0; i < 7; i++) {
     const d = weekDates[i];
@@ -367,7 +367,6 @@ async function renderDay() {
     </div>`;
   }
 
-  // 时间行
   for (const hour of hours) {
     html += `<div class="time-label">${hour}:00</div>`;
     for (let i = 0; i < 7; i++) {
@@ -379,20 +378,16 @@ async function renderDay() {
   html += '</div></div>';
   $content.innerHTML = html;
 
-  // 在cell上绘制时间块
+  // 绘制时间块
   const cells = $content.querySelectorAll('.time-cell');
-  // 建立索引: cells按行排列 (hour-row, col 0-6)
-  // 对每天的blocks，在对应列的第一个cell上place
   for (let i = 0; i < 7; i++) {
     const ds = formatDate(weekDates[i]);
     const blocks = allBlocks[ds] || [];
     for (const blk of blocks) {
       const offsetMin = (blk.startHour - START_HOUR) * 60 + blk.startMinute;
-      const topPx = (offsetMin / 60) * 52; // 52px per hour row
+      const topPx = (offsetMin / 60) * 52;
       const heightPx = Math.max((blk.duration / 60) * 52, 20);
-
-      // 找到这一列第一个hour的cell
-      const cellIdx = 0 * 7 + i; // 第0行第i列
+      const cellIdx = 0 * 7 + i;
       const cell = cells[cellIdx];
       if (cell) {
         const block = document.createElement('div');
@@ -408,7 +403,6 @@ async function renderDay() {
     }
   }
 
-  // 事件
   document.getElementById('back-week').addEventListener('click', () => { state.view = 'week'; render(); });
   document.getElementById('week-prev').addEventListener('click', () => {
     state.weekMonday = new Date(state.weekMonday);
@@ -497,9 +491,9 @@ function blockDialog(date, hour, block) {
     const m = parseInt(document.getElementById('blk-min').value);
     const d = parseInt(document.getElementById('blk-dur').value);
     if (isEdit) {
-      await GoApp.UpdateDayBlock?.(block.id, t, selectedColor, h, m, d);
+      await callGo('UpdateDayBlock', block.id, t, selectedColor, h, m, d);
     } else {
-      await GoApp.AddDayBlock?.(date, h, m, d, t, selectedColor);
+      await callGo('AddDayBlock', date, h, m, d, t, selectedColor);
     }
     hideModal();
     renderDay();
@@ -507,7 +501,7 @@ function blockDialog(date, hour, block) {
 
   if (isEdit) {
     document.getElementById('blk-delete').addEventListener('click', async () => {
-      await GoApp.RemoveDayBlock?.(block.id);
+      await callGo('RemoveDayBlock', block.id);
       hideModal();
       renderDay();
     });
@@ -522,13 +516,10 @@ function escHtml(s) {
 }
 
 // ─── 启动 ───
-initBindings().then(() => {
-  // 初始化置顶状态
-  (async () => {
-    try {
-      pinned = await GoApp.GetAlwaysOnTop?.() || false;
-      updatePinDisplay();
-    } catch(e) {}
-  })();
+initBindings().then(async () => {
+  try {
+    pinned = (await callGo('GetAlwaysOnTop')) || false;
+    updatePinDisplay();
+  } catch(e) {}
   render();
 });
